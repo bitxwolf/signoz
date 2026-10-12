@@ -5451,6 +5451,31 @@ export interface DashboardtypesScatterPlotDimensionsDTO {
 	y?: string;
 }
 
+export enum DashboardtypesThresholdAxisDTO {
+	x = 'x',
+	y = 'y',
+}
+export interface DashboardtypesScatterPlotThresholdDTO {
+	axis?: DashboardtypesThresholdAxisDTO;
+	/**
+	 * @type string
+	 */
+	color: string;
+	/**
+	 * @type string
+	 */
+	label?: string;
+	/**
+	 * @type string
+	 */
+	unit?: string;
+	/**
+	 * @type number
+	 * @format double
+	 */
+	value: number;
+}
+
 export interface DashboardtypesScatterPlotPanelSpecDTO {
 	axes?: DashboardtypesScatterPlotAxesDTO;
 	chartAppearance?: DashboardtypesScatterPlotChartAppearanceDTO;
@@ -5460,7 +5485,7 @@ export interface DashboardtypesScatterPlotPanelSpecDTO {
 	/**
 	 * @type array,null
 	 */
-	thresholds?: DashboardtypesThresholdWithLabelDTO[] | null;
+	thresholds?: DashboardtypesScatterPlotThresholdDTO[] | null;
 	visualization?: DashboardtypesBasicVisualizationDTO;
 }
 
