@@ -17,6 +17,7 @@ import {
 	type TelemetrytypesSignalDTO,
 } from 'api/generated/services/sigNoz.schemas';
 
+import { DEFAULT_BAR_COLOR } from '../kinds/TopListPanel/constants';
 import { defaultColumnsForSignal } from '../../PanelEditor/ListColumnsEditor/selectFields';
 import {
 	type AnyThreshold,
@@ -172,6 +173,7 @@ const SECTION_SEEDS: SectionSeeds = {
 		): SectionSpecMap[SectionKind.Appearance] => {
 			const old = oldPluginSpec?.appearance;
 			return {
+				barColor: (controls.barColor && old?.barColor) || DEFAULT_BAR_COLOR,
 				...(controls.showRank &&
 					old?.showRank !== undefined && { showRank: old.showRank }),
 				...(controls.showShare &&
