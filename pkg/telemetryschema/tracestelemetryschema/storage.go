@@ -330,6 +330,15 @@ func attributeColumnEvolutionRegistered(key *telemetrytypes.TelemetryFieldKey, c
 	return false
 }
 
+// AttributeJSONNumberExpr reads every numeric type of path as Float64, like
+// the attributes_number map, and anything else as NULL. Skip indexes on
+// numeric paths are built on this exact expression so filters match them;
+// the type set is a has() array because an index expression with IN is
+// never matched.
+func AttributeJSONNumberExpr(path string) string {
+	return fmt.Sprintf("if(has(['Int64', 'UInt64', 'Float64'], dynamicType(%s)), accurateCastOrNull(%s, 'Float64'), NULL)", path, path)
+}
+
 // attributeJSONValueExpr renders the value expression for a span attribute read from the JSON
 // column along with its per-type existence guard.
 // Numeric and bool gate a crash-safe accurateCastOrNull by dynamicType: the cast alone coerces
@@ -343,7 +352,7 @@ func attributeJSONValueExpr(path string, dataType telemetrytypes.FieldDataType) 
 	case telemetrytypes.FieldDataTypeInt64,
 		telemetrytypes.FieldDataTypeFloat64,
 		telemetrytypes.FieldDataTypeNumber:
-		expr := fmt.Sprintf("if(dynamicType(%s) IN ('Int64', 'UInt64', 'Float64'), accurateCastOrNull(%s, 'Float64'), NULL)", path, path) // all numeric types to float64 like attributes_number map.
+		expr := AttributeJSONNumberExpr(path)
 		return expr, expr + " IS NOT NULL"
 	case telemetrytypes.FieldDataTypeBool:
 		expr := fmt.Sprintf("if(dynamicType(%s) = 'Bool', accurateCastOrNull(%s, 'Bool'), NULL)", path, path)
@@ -449,6 +458,24 @@ func absentReads(q qbtypes.QueryInfo, key *telemetrytypes.TelemetryFieldKey, col
 	return qbtypes.AlwaysPresent, nil
 }
 
+// readsJSONNumber reports whether key reads through AttributeJSONNumberExpr
+// alone, after evolution selection.
+func readsJSONNumber(q qbtypes.QueryInfo, key *telemetrytypes.TelemetryFieldKey, columns []*schema.Column) (bool, error) {
+	if key.FieldContext != telemetrytypes.FieldContextAttribute {
+		return false, nil
+	}
+	switch key.FieldDataType {
+	case telemetrytypes.FieldDataTypeInt64, telemetrytypes.FieldDataTypeFloat64, telemetrytypes.FieldDataTypeNumber:
+	default:
+		return false, nil
+	}
+	newColumns, _, err := qbtypes.SelectEvolutionsForColumns(columns, key.Evolutions, q.StartNs, q.EndNs)
+	if err != nil {
+		return false, err
+	}
+	return len(newColumns) == 1 && newColumns[0].Type.GetType() == schema.ColumnTypeEnumJSON, nil
+}
+
 // Read composes the bare read of one key with its membership test and what
 // an absent row reads. A span scope key is virtual. It is always present,
 // and its read is its name. A time column keeps its native type through the
@@ -473,7 +500,11 @@ func (m *storage) Read(ctx context.Context, q qbtypes.QueryInfo, key *telemetryt
 	if err != nil {
 		return qbtypes.Read{}, err
 	}
-	read := qbtypes.Read{SQL: sql, WhenAbsent: whenAbsent, KeepType: temporal}
+	jsonNumber, err := readsJSONNumber(q, key, columns)
+	if err != nil {
+		return qbtypes.Read{}, err
+	}
+	read := qbtypes.Read{SQL: sql, WhenAbsent: whenAbsent, KeepType: temporal, Float64: jsonNumber}
 	switch {
 	case key.FieldContext == telemetrytypes.FieldContextScope:
 		read.Presence = scopeJSONExistsExpression(key, sql, true)

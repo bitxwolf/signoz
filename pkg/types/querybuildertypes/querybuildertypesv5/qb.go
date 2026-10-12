@@ -98,6 +98,10 @@ type Read struct {
 	// native type alone. A time column would collapse to seconds. A metrics
 	// label already reads as String.
 	KeepType bool
+	// Float64: SQL already reads as Float64, so a filter compares it with a
+	// number bare instead of through toFloat64, which hides it from a skip
+	// index on SQL.
+	Float64 bool
 	// FilterOnly: the key filters but cannot be selected or grouped. Today
 	// that is a body JSON path when the JSON body flag is off: the legacy
 	// string body has no column read for a path. A select field, group by,

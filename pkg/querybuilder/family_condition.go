@@ -41,7 +41,7 @@ func SharedConditionForRead(
 	value any,
 	sb *sqlbuilder.SelectBuilder,
 ) (qbtypes.Compiled, error) {
-	condition, err := sharedOperator(ctx, q, storage, field, read.SQL, operator, value, sb)
+	condition, err := sharedOperator(ctx, q, storage, field, read, operator, value, sb)
 	if err != nil || condition == "" {
 		return qbtypes.Compiled{}, err
 	}
@@ -58,7 +58,7 @@ func sharedOperator(
 	q qbtypes.QueryInfo,
 	storage qbtypes.Storage,
 	field *telemetrytypes.LogicalField,
-	sql string,
+	read qbtypes.Read,
 	operator qbtypes.FilterOperator,
 	value any,
 	sb *sqlbuilder.SelectBuilder,
@@ -75,7 +75,7 @@ func sharedOperator(
 		}
 		conditions := make([]string, 0, len(values))
 		for _, item := range values {
-			condition, err := sharedOperator(ctx, q, storage, field, sql, itemOperator, item, sb)
+			condition, err := sharedOperator(ctx, q, storage, field, read, itemOperator, item, sb)
 			if err != nil {
 				return "", err
 			}
@@ -93,8 +93,11 @@ func sharedOperator(
 	}
 	// Coercion switches only on the data type, which every member shares, so
 	// the first member stands in for the field.
-	read, value := DataTypeCollisionHandledFieldName(field.Single(), value, sql, operator)
-	return OperatorCondition(ctx, q, storage, field, read, operator, value, sb)
+	sql, value := DataTypeCollisionHandledFieldName(field.Single(), value, read.SQL, operator)
+	if read.Float64 && sql == castFloatHack(read.SQL) {
+		sql = read.SQL
+	}
+	return OperatorCondition(ctx, q, storage, field, sql, operator, value, sb)
 }
 
 // OperatorCondition renders one operator over an already cast read. It is
