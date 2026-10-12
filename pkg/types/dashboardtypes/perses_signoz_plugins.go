@@ -2,7 +2,8 @@ package dashboardtypes
 
 import (
 	"encoding/json"
-	"math"
+	"maps"
+	"slices"
 	"strconv"
 
 	"github.com/SigNoz/signoz/pkg/errors"
@@ -338,7 +339,33 @@ type ScatterPlotPanelSpec struct {
 	Axes            ScatterPlotAxes            `json:"axes"`
 	ChartAppearance ScatterPlotChartAppearance `json:"chartAppearance"`
 	Legend          Legend                     `json:"legend"`
-	Thresholds      []ThresholdWithLabel       `json:"thresholds" validate:"dive"`
+	Thresholds      []ScatterPlotThreshold     `json:"thresholds" validate:"dive"`
+}
+
+func (s *ScatterPlotPanelSpec) validateAgainstQuery(query Query, path string) error {
+	composite, err := query.Spec.Plugin.buildV5CompositeQueryFromPlugin()
+	if err != nil {
+		return errors.WrapInvalidInputf(err, ErrCodeDashboardInvalidInput, "%s.dimensions: %s", path, err.Error())
+	}
+	keys, known := composite.CollectResultColumnKeys()
+	if !known {
+		return nil
+	}
+	for _, binding := range []struct{ field, key string }{{"x", s.Dimensions.X}, {"y", s.Dimensions.Y}, {"sizeBy", s.Dimensions.SizeBy}} {
+		// Empty is unset: the renderer picks a column or a fixed size.
+		if binding.key == "" {
+			continue
+		}
+		if _, ok := keys.Aggregations[binding.key]; !ok {
+			return errors.NewInvalidInputf(ErrCodeDashboardInvalidInput, "%s.dimensions.%s: %q is not a value column of the panel's query; value columns: %s", path, binding.field, binding.key, allowedValuesForKind(slices.Sorted(maps.Keys(keys.Aggregations))))
+		}
+	}
+	for _, label := range s.Dimensions.ColorBy {
+		if _, ok := keys.Groups[label]; !ok {
+			return errors.NewInvalidInputf(ErrCodeDashboardInvalidInput, "%s.dimensions.colorBy: %q is not a group-by key of the panel's query; group-by keys: %s", path, label, allowedValuesForKind(slices.Sorted(maps.Keys(keys.Groups))))
+		}
+	}
+	return nil
 }
 
 // ScatterPlotDimensions binds result columns to what a dot encodes. Value columns
@@ -368,12 +395,12 @@ type ScatterPlotChartAppearance struct {
 }
 
 // ScatterPlotPoints keeps the fixed size and the size range side by side so
-// binding or unbinding dimensions.size restores the other's last setting. Nil
+// binding or unbinding dimensions.sizeBy restores the other's last setting. Nil
 // fields resolve to the renderer default.
 type ScatterPlotPoints struct {
-	Size    *PointDiameter `json:"size" description:"Diameter of every dot when dimensions.size is unset."`
-	MinSize *PointDiameter `json:"minSize" description:"Diameter of the smallest dot when dimensions.size is set."`
-	MaxSize *PointDiameter `json:"maxSize" description:"Diameter of the largest dot when dimensions.size is set."`
+	Size    *PointDiameter `json:"size" description:"Diameter of every dot when dimensions.sizeBy is unset."`
+	MinSize *PointDiameter `json:"minSize" description:"Diameter of the smallest dot when dimensions.sizeBy is set."`
+	MaxSize *PointDiameter `json:"maxSize" description:"Diameter of the largest dot when dimensions.sizeBy is set."`
 	Opacity *PointOpacity  `json:"opacity"`
 }
 
@@ -473,6 +500,11 @@ type ComparisonThreshold struct {
 	Unit     string             `json:"unit"`
 	Color    string             `json:"color" validate:"required" required:"true"`
 	Format   ThresholdFormat    `json:"format"`
+}
+
+type ScatterPlotThreshold struct {
+	ThresholdWithLabel
+	Axis ThresholdAxis `json:"axis"`
 }
 
 type TableThreshold struct {
@@ -801,6 +833,45 @@ func (as *AxisScale) UnmarshalJSON(data []byte) error {
 	}
 }
 
+// ThresholdAxis is the axis a scatter plot threshold line marks: `y` draws it
+// horizontally, `x` vertically.
+type ThresholdAxis struct{ valuer.String }
+
+var (
+	ThresholdAxisX = ThresholdAxis{valuer.NewString("x")}
+	ThresholdAxisY = ThresholdAxis{valuer.NewString("y")} // default
+)
+
+func (ThresholdAxis) Enum() []any {
+	return []any{ThresholdAxisX, ThresholdAxisY}
+}
+
+func (ta ThresholdAxis) ValueOrDefault() string {
+	if ta.IsZero() {
+		return ThresholdAxisY.StringValue()
+	}
+	return ta.StringValue()
+}
+
+func (ta ThresholdAxis) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ta.ValueOrDefault())
+}
+
+func (ta *ThresholdAxis) UnmarshalJSON(data []byte) error {
+	var v string
+	if err := json.Unmarshal(data, &v); err != nil {
+		return errors.WrapInvalidInputf(err, ErrCodeDashboardInvalidInput, "invalid threshold axis: must be a string, one of `x` or `y`")
+	}
+	val := ThresholdAxis{valuer.NewString(v)}
+	switch val {
+	case ThresholdAxisX, ThresholdAxisY:
+		*ta = val
+		return nil
+	default:
+		return errors.NewInvalidInputf(ErrCodeDashboardInvalidInput, "invalid threshold axis %q: must be `x` or `y`", v)
+	}
+}
+
 type FillMode struct{ valuer.String }
 
 var (
@@ -953,12 +1024,12 @@ func (PointDiameter) PrepareJSONSchema(s *jsonschema.Schema) error {
 }
 
 func (d *PointDiameter) UnmarshalJSON(data []byte) error {
-	var v float64
+	var v int
 	if err := json.Unmarshal(data, &v); err != nil {
-		return errors.WrapInvalidInputf(err, ErrCodeDashboardInvalidInput, "invalid point size: must be a whole number between %d and %d", minPointDiameter, maxPointDiameter)
+		return errors.WrapInvalidInputf(err, ErrCodeDashboardInvalidInput, "invalid point diameter: must be a whole number between %d and %d", minPointDiameter, maxPointDiameter)
 	}
-	if v != math.Trunc(v) || v < minPointDiameter || v > maxPointDiameter {
-		return errors.NewInvalidInputf(ErrCodeDashboardInvalidInput, "invalid point size %v: must be a whole number between %d and %d", v, minPointDiameter, maxPointDiameter)
+	if v < minPointDiameter || v > maxPointDiameter {
+		return errors.NewInvalidInputf(ErrCodeDashboardInvalidInput, "invalid point diameter %d: must be a whole number between %d and %d", v, minPointDiameter, maxPointDiameter)
 	}
 	*d = PointDiameter(v)
 	return nil
