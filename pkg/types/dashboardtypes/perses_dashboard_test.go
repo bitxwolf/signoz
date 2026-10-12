@@ -1932,7 +1932,10 @@ func TestValidateScatterPlotDashboard(t *testing.T) {
 		},
 		ChartAppearance: ScatterPlotChartAppearance{Points: ScatterPlotPoints{Size: &size, MinSize: &minSize, MaxSize: &maxSize, Opacity: &opacity}},
 		Legend:          Legend{Position: LegendPositionRight, Mode: LegendModeList, CustomColors: map[string]string{"checkout": "#1f77b4"}},
-		Thresholds:      []ThresholdWithLabel{{Value: 300, Unit: "ms", Color: "#f00", Label: "p99 SLO"}},
+		Thresholds: []ScatterPlotThreshold{
+			{ThresholdWithLabel: ThresholdWithLabel{Value: 300, Unit: "ms", Color: "#f00", Label: "p99 SLO"}, Axis: ThresholdAxisY},
+			{ThresholdWithLabel: ThresholdWithLabel{Value: 50, Color: "#0f0"}, Axis: ThresholdAxisX},
+		},
 	}, panelSpec)
 
 	dashboard := &DashboardV2{Spec: *spec}
@@ -1991,6 +1994,12 @@ func TestInvalidateScatterPlotPanelSpecValues(t *testing.T) {
 			panelKind:              "signoz/ScatterPlotPanel",
 			panelSpec:              `{"axes": {"softMin": 0}}`,
 			expectedErrorSubstring: "unknown field",
+		},
+		{
+			scenario:               "unknown threshold axis",
+			panelKind:              "signoz/ScatterPlotPanel",
+			panelSpec:              `{"thresholds": [{"value": 1, "color": "#f00", "axis": "z"}]}`,
+			expectedErrorSubstring: "invalid threshold axis \"z\": must be `x` or `y`",
 		},
 		{
 			scenario:               "unknown dimension",
@@ -2056,7 +2065,7 @@ func TestInvalidateScatterPlotPanelSpecValues(t *testing.T) {
 			scenario:               "threshold without a color",
 			panelKind:              "signoz/ScatterPlotPanel",
 			panelSpec:              `{"thresholds": [{"value": 300}]}`,
-			expectedErrorSubstring: "Thresholds[0].Color",
+			expectedErrorSubstring: "Color' Error:Field validation for 'Color' failed on the 'required' tag",
 		},
 		{
 			scenario:               "scale on a time series panel",
