@@ -42,12 +42,14 @@ GCP_ACCOUNT_SPEC = ProviderAccountSpec(
     },
     build_config=lambda p: {
         "gcp": {
+            "setupMode": "manual",
             "deploymentProjectId": p["deployment_project_id"],
             "deploymentRegion": p["deployment_region"],
             "projectIds": p["project_ids"],
         }
     },
     expected_config=lambda p: {
+        "setupMode": "manual",
         "deploymentProjectId": p["deployment_project_id"],
         "deploymentRegion": p["deployment_region"],
         "projectIds": p["project_ids"],
@@ -291,6 +293,34 @@ def test_update_account_after_checkin_preserves_connected_status(
     assert found_after["agentReport"]["syncState"] == found_before["agentReport"]["syncState"], "config update must not change syncState"
     assert found_after["config"][spec.provider] == spec.expected_config(spec.updated_params), "Config should reflect the update"
     assert found_after["removedAt"] is None, "removedAt should still be null"
+
+
+def test_update_gcp_agent_account_rejected(
+    signoz: types.SigNoz,
+    create_user_admin: types.Operation,  # pylint: disable=unused-argument
+    get_token: Callable[[str, str], str],
+    create_cloud_integration_account: Callable,
+) -> None:
+    admin_token = get_token(USER_ADMIN_EMAIL, USER_ADMIN_PASSWORD)
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    project_id = "signoz-agent-update-project"
+    account_id = create_cloud_integration_account(admin_token, "gcp", config={"gcp": {"setupMode": "agent", "deploymentProjectId": project_id, "deploymentRegion": "us-central1"}})["id"]
+    account_url = signoz.self.host_configs["8080"].get(f"/api/v1/cloud_integrations/gcp/accounts/{account_id}")
+
+    checkin = simulate_agent_checkin(signoz, admin_token, "gcp", account_id, project_id)
+    assert checkin.status_code == HTTPStatus.OK, checkin.text
+
+    response = requests.put(account_url, headers=headers, json={"config": {"gcp": {"deploymentProjectId": project_id, "deploymentRegion": "us-central1", "projectIds": [project_id, "signoz-agent-update-project-2"]}}}, timeout=10)
+    assert response.status_code == HTTPStatus.BAD_REQUEST, response.text
+
+    response = requests.get(account_url, headers=headers, timeout=10)
+    assert response.status_code == HTTPStatus.OK, response.text
+    assert response.json()["data"]["config"]["gcp"] == {
+        "setupMode": "agent",
+        "deploymentProjectId": project_id,
+        "deploymentRegion": "us-central1",
+        "projectIds": [project_id],
+    }, "a rejected update must not change the agent account config"
 
 
 @provider_spec

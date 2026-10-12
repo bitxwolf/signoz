@@ -11,6 +11,7 @@ import {
 } from 'api/generated/services/cloudintegration';
 import {
 	CloudintegrationtypesCredentialsDTO,
+	CloudintegrationtypesGCPSetupModeDTO,
 	CloudintegrationtypesPostableAccountDTO,
 	RenderErrorResponseDTO,
 } from 'api/generated/services/sigNoz.schemas';
@@ -96,6 +97,7 @@ export function useCloudAccountSetupDrawer({
 				const payload: CloudintegrationtypesPostableAccountDTO = {
 					config: {
 						gcp: {
+							setupMode: CloudintegrationtypesGCPSetupModeDTO.manual,
 							deploymentRegion: values.deploymentRegion,
 							deploymentProjectId: values.deploymentProjectId,
 							projectIds: values.projectIds || [],

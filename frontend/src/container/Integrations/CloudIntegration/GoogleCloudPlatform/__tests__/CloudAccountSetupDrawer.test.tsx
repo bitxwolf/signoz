@@ -142,6 +142,7 @@ describe('GCP CloudAccountSetupDrawer', () => {
 		expect(createAccountPayload).toStrictEqual({
 			config: {
 				gcp: {
+					setupMode: 'manual',
 					deploymentRegion: 'asia-south1',
 					deploymentProjectId: 'my-deployment-project-123',
 					projectIds: ['project-a', 'project-b'],

@@ -3464,6 +3464,10 @@ export interface CloudintegrationtypesAzureAccountConfigDTO {
 	resourceGroups: string[];
 }
 
+export enum CloudintegrationtypesGCPSetupModeDTO {
+	manual = 'manual',
+	agent = 'agent',
+}
 export interface CloudintegrationtypesGCPAccountConfigDTO {
 	/**
 	 * @type string
@@ -3477,6 +3481,7 @@ export interface CloudintegrationtypesGCPAccountConfigDTO {
 	 * @type array
 	 */
 	projectIds: string[];
+	setupMode: CloudintegrationtypesGCPSetupModeDTO;
 }
 
 export interface CloudintegrationtypesAccountConfigDTO {
@@ -3711,7 +3716,10 @@ export interface CloudintegrationtypesCollectedMetricDTO {
 }
 
 export interface CloudintegrationtypesGCPConnectionArtifactDTO {
-	[key: string]: unknown;
+	/**
+	 * @type string
+	 */
+	cliCommand: string;
 }
 
 export interface CloudintegrationtypesConnectionArtifactDTO {
@@ -3750,8 +3758,56 @@ export interface CloudintegrationtypesDataCollectedDTO {
 	metrics?: CloudintegrationtypesCollectedMetricDTO[] | null;
 }
 
+export interface CloudintegrationtypesGCPLogsCollectionStrategyDTO {
+	/**
+	 * @type string
+	 */
+	sinkFilter: string;
+}
+
+export interface CloudintegrationtypesGCPMetricsCollectionStrategyDTO {
+	/**
+	 * @type array
+	 */
+	metricNames: string[];
+}
+
+export interface CloudintegrationtypesGCPTelemetryCollectionStrategyDTO {
+	logs?: CloudintegrationtypesGCPLogsCollectionStrategyDTO;
+	metrics?: CloudintegrationtypesGCPMetricsCollectionStrategyDTO;
+}
+
 export interface CloudintegrationtypesGCPIntegrationConfigDTO {
-	[key: string]: unknown;
+	/**
+	 * @type string
+	 */
+	deploymentProjectId: string;
+	/**
+	 * @type string
+	 */
+	deploymentRegion: string;
+	/**
+	 * @type array
+	 */
+	projectIds: string[];
+	setupMode: CloudintegrationtypesGCPSetupModeDTO;
+	telemetryCollectionStrategy: CloudintegrationtypesGCPTelemetryCollectionStrategyDTO;
+}
+
+export interface CloudintegrationtypesGCPPostableAccountConfigDTO {
+	/**
+	 * @type string
+	 */
+	deploymentProjectId: string;
+	/**
+	 * @type string
+	 */
+	deploymentRegion: string;
+	/**
+	 * @type array
+	 */
+	projectIds?: string[];
+	setupMode: CloudintegrationtypesGCPSetupModeDTO;
 }
 
 export interface CloudintegrationtypesGettableAccountWithConnectionArtifactDTO {
@@ -3906,7 +3962,7 @@ export interface CloudintegrationtypesGettableServicesMetadataDTO {
 export interface CloudintegrationtypesPostableAccountConfigDTO {
 	aws?: CloudintegrationtypesAWSPostableAccountConfigDTO;
 	azure?: CloudintegrationtypesAzureAccountConfigDTO;
-	gcp?: CloudintegrationtypesGCPAccountConfigDTO;
+	gcp?: CloudintegrationtypesGCPPostableAccountConfigDTO;
 }
 
 export interface CloudintegrationtypesPostableAccountDTO {
@@ -4050,9 +4106,9 @@ export interface CloudintegrationtypesUpdatableGCPAccountConfigDTO {
 	 */
 	deploymentRegion: string;
 	/**
-	 * @type array,null
+	 * @type array
 	 */
-	projectIds: string[] | null;
+	projectIds: string[];
 }
 
 export interface CloudintegrationtypesUpdatableAccountConfigDTO {
