@@ -133,7 +133,7 @@ func (i *PromotePath) ValidateAndSetDefaults(target Target) error {
 			return errors.Newf(errors.TypeInvalidInput, errors.CodeInvalidInput, "index is not supported for column type: %s", index.FieldDataType)
 		}
 
-		i.Indexes[idx].JSONDataType = jsonDataType
+		i.Indexes[idx].JSONDataType = target.IndexDataType(jsonDataType)
 	}
 
 	return nil

@@ -27,14 +27,26 @@ func (t Target) BaseColumnPrefix() string { return t.BaseColumn + "." }
 func (t Target) PromotedColumnPrefix() string { return t.PromotedColumn() + "." }
 
 // IndexExpression folds logs strings to lower case over assumeNotNull for
-// case-insensitive LIKE searches; traces indexes are a bare type cast.
+// case-insensitive LIKE searches; traces numbers use the querier's Float64
+// read, other traces indexes are a bare type cast.
 func (t Target) IndexExpression(column, path, jsonDataType string) string {
-	switch t.Entry.Signal {
-	case telemetrytypes.SignalLogs:
+	switch {
+	case t.Entry.Signal == telemetrytypes.SignalLogs:
 		return schemamigrator.JSONSubColumnIndexExpr(column, path, jsonDataType)
+	case jsonDataType == telemetrytypes.Int64.StringValue(), jsonDataType == telemetrytypes.Float64.StringValue():
+		return tracestelemetryschema.AttributeJSONNumberExpr(jsonSubColumn(column, path))
 	default:
 		return simpleJSONSubColumnIndexExpr(column, path, jsonDataType)
 	}
+}
+
+// IndexDataType folds traces Int64 into Float64, the one type the querier
+// reads every traces number as.
+func (t Target) IndexDataType(jsonDataType telemetrytypes.JSONDataType) telemetrytypes.JSONDataType {
+	if t.Entry.Signal != telemetrytypes.SignalLogs && jsonDataType == telemetrytypes.Int64 {
+		return telemetrytypes.Float64
+	}
+	return jsonDataType
 }
 
 func (t Target) JSONIndexLookup() telemetrytypes.JSONIndexLookup {
@@ -126,7 +138,11 @@ func TargetFor(signal telemetrytypes.Signal, context telemetrytypes.FieldContext
 // the cast unwraps the Nullable the sub-column access returns, which bloom
 // filter indexes reject.
 func simpleJSONSubColumnIndexExpr(column, path, jsonDataType string) string {
-	return fmt.Sprintf("%s.%s::%s", column, clickhousesql.Identifier(path), jsonDataType)
+	return fmt.Sprintf("%s::%s", jsonSubColumn(column, path), jsonDataType)
+}
+
+func jsonSubColumn(column, path string) string {
+	return fmt.Sprintf("%s.%s", column, clickhousesql.Identifier(path))
 }
 
 // reservedPathPrefix returns the target prefix path carries, if any: the base

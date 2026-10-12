@@ -93,6 +93,17 @@ func TestUnfoldJSONSubColumnIndexExpr(t *testing.T) {
 			wantType:   "Int64",
 		},
 		{
+			name:       "TracesNumber",
+			expr:       "if(has(['Int64', 'UInt64', 'Float64'], dynamicType(attributes.`http.status_code`)), accurateCastOrNull(attributes.`http.status_code`, 'Float64'), NULL)",
+			wantColumn: "attributes.`http.status_code`",
+			wantType:   "Float64",
+		},
+		{
+			name:    "TracesNumber_MismatchedPaths",
+			expr:    "if(has(['Int64', 'UInt64', 'Float64'], dynamicType(attributes.a)), accurateCastOrNull(attributes.b, 'Float64'), NULL)",
+			wantErr: true,
+		},
+		{
 			name:    "UnrecognizedForm",
 			expr:    "toString(attributes.status)",
 			wantErr: true,
@@ -137,9 +148,25 @@ func TestUnfoldJSONSubColumnIndexExprTracesRoundTrip(t *testing.T) {
 			name:         "PlainKey_UnquotedInStorage",
 			column:       "attributes_promoted",
 			path:         "status",
-			jsonDataType: "Int64",
-			wantExpr:     "attributes_promoted.`status`::Int64",
-			storedExpr:   "CAST(attributes_promoted.status, 'Int64')",
+			jsonDataType: "String",
+			wantExpr:     "attributes_promoted.`status`::String",
+			storedExpr:   "CAST(attributes_promoted.status, 'String')",
+		},
+		{
+			name:         "DottedNumber_BackticksPreservedInStorage",
+			column:       "attributes",
+			path:         "http.status_code",
+			jsonDataType: "Float64",
+			wantExpr:     "if(has(['Int64', 'UInt64', 'Float64'], dynamicType(attributes.`http.status_code`)), accurateCastOrNull(attributes.`http.status_code`, 'Float64'), NULL)",
+			storedExpr:   "if(has(['Int64', 'UInt64', 'Float64'], dynamicType(attributes.`http.status_code`)), accurateCastOrNull(attributes.`http.status_code`, 'Float64'), NULL)",
+		},
+		{
+			name:         "PlainNumber_UnquotedInStorage",
+			column:       "attributes_promoted",
+			path:         "latency",
+			jsonDataType: "Float64",
+			wantExpr:     "if(has(['Int64', 'UInt64', 'Float64'], dynamicType(attributes_promoted.`latency`)), accurateCastOrNull(attributes_promoted.`latency`, 'Float64'), NULL)",
+			storedExpr:   "if(has(['Int64', 'UInt64', 'Float64'], dynamicType(attributes_promoted.latency)), accurateCastOrNull(attributes_promoted.latency, 'Float64'), NULL)",
 		},
 	}
 

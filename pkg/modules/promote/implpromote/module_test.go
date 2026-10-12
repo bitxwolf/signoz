@@ -420,7 +420,7 @@ func TestIndexMaterializedPaths(t *testing.T) {
 		{Name: "k8s.pod.name", Signal: telemetrytypes.SignalTraces, FieldContext: telemetrytypes.FieldContextResource, FieldDataType: telemetrytypes.FieldDataTypeString, Indexes: columnIndex},
 	}
 	userIDDDL := "`attributes.user.id_String_bloom_filter` attributes.`user.id`::String TYPE bloom_filter(0.01) GRANULARITY 64"
-	retryCountDDL := "`attributes.retry.count_Float64_bloom_filter` attributes.`retry.count`::Float64 TYPE bloom_filter(0.01) GRANULARITY 64"
+	retryCountDDL := "`attributes.retry.count_Float64_bloom_filter` if(has(['Int64', 'UInt64', 'Float64'], dynamicType(attributes.`retry.count`)), accurateCastOrNull(attributes.`retry.count`, 'Float64'), NULL) TYPE bloom_filter(0.01) GRANULARITY 64"
 
 	testCases := []struct {
 		name        string

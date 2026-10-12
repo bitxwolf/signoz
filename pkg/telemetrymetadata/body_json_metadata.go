@@ -14,6 +14,7 @@ import (
 	"github.com/SigNoz/signoz/pkg/errors"
 	"github.com/SigNoz/signoz/pkg/querybuilder"
 	"github.com/SigNoz/signoz/pkg/telemetryschema/logstelemetryschema"
+	"github.com/SigNoz/signoz/pkg/telemetryschema/tracestelemetryschema"
 	"github.com/SigNoz/signoz/pkg/types/ctxtypes"
 	"github.com/SigNoz/signoz/pkg/types/instrumentationtypes"
 	"github.com/SigNoz/signoz/pkg/types/promotetypes"
@@ -41,11 +42,17 @@ var logsBodyIndexLookup = promotetypes.NewLogsBodyTarget().JSONIndexLookup()
 // ClickHouse stores a `col.path::Type` skip index expression as CAST(col.path, 'Type').
 var simpleJSONSubColumnIndexExprRe = regexp.MustCompile(`^CAST\((?P<expr>[^()]+), '(?P<type>.+)'\)$`)
 
-// unfoldJSONSubColumnIndexExpr accepts both the folded (lower/assumeNotNull)
-// and the bare type-cast expression forms.
+// ClickHouse stores a traces number index expression as written.
+var jsonNumberSubColumnIndexExprRe = regexp.MustCompile("^" + strings.ReplaceAll(regexp.QuoteMeta(tracestelemetryschema.AttributeJSONNumberExpr("\x00")), "\x00", `([^()]+)`) + "$")
+
+// unfoldJSONSubColumnIndexExpr accepts the folded (lower/assumeNotNull), the
+// traces number and the bare type-cast expression forms.
 func unfoldJSONSubColumnIndexExpr(expr string) (string, string, error) {
 	if columnExpr, columnType, err := schemamigrator.UnfoldJSONSubColumnIndexExpr(expr); err == nil {
 		return columnExpr, columnType, nil
+	}
+	if matches := jsonNumberSubColumnIndexExprRe.FindStringSubmatch(expr); matches != nil && matches[1] == matches[2] {
+		return matches[1], telemetrytypes.Float64.StringValue(), nil
 	}
 	matches := simpleJSONSubColumnIndexExprRe.FindStringSubmatch(expr)
 	if matches == nil {

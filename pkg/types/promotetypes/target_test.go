@@ -3,6 +3,7 @@ package promotetypes
 import (
 	"testing"
 
+	"github.com/SigNoz/signoz/pkg/types/telemetrytypes"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -47,11 +48,46 @@ func TestIndexExpression(t *testing.T) {
 			jsonDataType: "String",
 			want:         "attributes.`user-name`::String",
 		},
+		{
+			name:         "TracesFloat64_QuerierNumberRead",
+			target:       NewTracesAttributesTarget(),
+			column:       "attributes",
+			path:         "http.status_code",
+			jsonDataType: "Float64",
+			want:         "if(has(['Int64', 'UInt64', 'Float64'], dynamicType(attributes.`http.status_code`)), accurateCastOrNull(attributes.`http.status_code`, 'Float64'), NULL)",
+		},
+		{
+			name:         "TracesInt64_QuerierNumberRead",
+			target:       NewTracesAttributesTarget(),
+			column:       "attributes_promoted",
+			path:         "retry.count",
+			jsonDataType: "Int64",
+			want:         "if(has(['Int64', 'UInt64', 'Float64'], dynamicType(attributes_promoted.`retry.count`)), accurateCastOrNull(attributes_promoted.`retry.count`, 'Float64'), NULL)",
+		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			assert.Equal(t, testCase.want, testCase.target.IndexExpression(testCase.column, testCase.path, testCase.jsonDataType))
+		})
+	}
+}
+
+func TestIndexDataType(t *testing.T) {
+	testCases := []struct {
+		name         string
+		target       Target
+		jsonDataType telemetrytypes.JSONDataType
+		want         telemetrytypes.JSONDataType
+	}{
+		{name: "TracesInt64_Float64", target: NewTracesAttributesTarget(), jsonDataType: telemetrytypes.Int64, want: telemetrytypes.Float64},
+		{name: "TracesString_Unchanged", target: NewTracesAttributesTarget(), jsonDataType: telemetrytypes.String, want: telemetrytypes.String},
+		{name: "LogsInt64_Unchanged", target: NewLogsBodyTarget(), jsonDataType: telemetrytypes.Int64, want: telemetrytypes.Int64},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			assert.Equal(t, testCase.want, testCase.target.IndexDataType(testCase.jsonDataType))
 		})
 	}
 }
